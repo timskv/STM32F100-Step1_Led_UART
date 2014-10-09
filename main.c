@@ -4,10 +4,54 @@
 
 #include "stm32f10x.h"
 #include "stm32f10x_conf.h"
+#include <misc.h>
+int16_t tmp,rx,tx_end;
+
+PIN_CONFIGURATION(A, 0, HIGH, INPUT_PULL_UP);
+PIN_CONFIGURATION(A, 1, HIGH, INPUT_PULL_UP);
+
+void USART1_IRQHandler(void)
+{
+	send_to_uart('J');
+	//Receive Data register not empty interrupt
+	if(USART_GetITStatus(USART1, USART_IT_RXNE) != RESET)
+	{
+		rx=1;
+        USART_ClearITPendingBit(USART1, USART_IT_RXNE);
+        tmp=USART_ReceiveData (USART1);
+
+        switch(tmp)
+        { //И выполняем определённое действие...
+            case '0':
+            	if(GPIO_ReadOutputDataBit(GPIOC,GPIO_Pin_9))
+            	{
+            		GPIO_WriteBit(GPIOC,GPIO_Pin_9,Bit_RESET);
+            	}
+            	else
+            	{
+            		GPIO_WriteBit(GPIOC, GPIO_Pin_9, Bit_SET);
+            	}
+            	//GPIOC->ODR^=GPIO_Pin_9;
+            	break;
+            case '1':
+            	GPIOC->ODR^=GPIO_Pin_8;
+            	break;
+        }
+
+	}
+    //Transmission complete interrupt
+	if(USART_GetITStatus(USART1, USART_IT_TC) != RESET)
+	{
+		USART_ClearITPendingBit(USART1, USART_IT_TC);
+		tx_end=1;
+	}
+}
+
 
 void Delay(volatile uint32_t nCount);
 
 GPIO_InitTypeDef GPIO_InitStructure;
+NVIC_InitTypeDef  NVIC_InitStructure; // interruptions
 
 void send_to_uart(uint8_t data)
 {
@@ -15,12 +59,15 @@ void send_to_uart(uint8_t data)
 	USART1->DR=data; //Отсылаем байт через UART
 }
 
+
+
 volatile int main(void)
 {
 	uint8_t uart_rx_data;
 
 	// init for GPIO (LED)
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);
+	RCC_APB2PeriphClockCmd(RCC_APB2ENR_AFIOEN , ENABLE); //for irq
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_Out_PP;
 	GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_8 | GPIO_Pin_9 ;       // two LED (guess on what pin!!)
@@ -60,6 +107,14 @@ volatile int main(void)
 	//Включаем UART
 	USART_Cmd(USART1, ENABLE);
 
+
+    NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+
+    USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
     while(1)
     {
         /*GPIO_WriteBit(GPIOC,GPIO_Pin_8,Bit_RESET);
@@ -67,7 +122,7 @@ volatile int main(void)
         Delay(8000000);
         GPIO_WriteBit(GPIOC,GPIO_Pin_9,Bit_RESET);
         GPIO_WriteBit(GPIOC,GPIO_Pin_8,Bit_SET);*/
-      //  Delay(8000000);
+        Delay(8000000);
     	send_to_uart('P');
         send_to_uart('i');
         send_to_uart('z');
@@ -79,10 +134,10 @@ volatile int main(void)
         send_to_uart(')');
         send_to_uart('\n');
         send_to_uart('\r');
-        if (USART1->SR & USART_SR_RXNE)
-        { // ... не пришло ли что-то в UART ?
-            uart_rx_data=USART1->DR; //Считываем то что пришло в переменную...
-            switch(uart_rx_data)
+//        if (USART1->SR & USART_SR_RXNE)
+//        { // ... не пришло ли что-то в UART ?
+//            uart_rx_data=USART1->DR; //Считываем то что пришло в переменную...
+        /*    switch(uart_rx_data)
             { //И выполняем определённое действие...
                 case '0':
                 	if(GPIO_ReadOutputDataBit(GPIOC,GPIO_Pin_9))
@@ -98,8 +153,8 @@ volatile int main(void)
                 case '1':
                 	GPIOC->ODR^=GPIO_Pin_8;
                 	break;
-            }
-        }
+            }*/
+      //  }
     }
 }
 
