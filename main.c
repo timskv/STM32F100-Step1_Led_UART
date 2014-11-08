@@ -6,10 +6,6 @@
 #include "stm32f10x_conf.h"
 #include <misc.h>
 int16_t tmp,rx,tx_end;
-
-PIN_CONFIGURATION(A, 0, HIGH, INPUT_PULL_UP);
-PIN_CONFIGURATION(A, 1, HIGH, INPUT_PULL_UP);
-
 void USART1_IRQHandler(void)
 {
 	send_to_uart('J');
